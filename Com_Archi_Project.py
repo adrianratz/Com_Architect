@@ -1,11 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# # Import Libraries 
-
-# In[4]:
-
-
 import numpy as np
 import tensorflow as tf
 import scipy.io as sio
@@ -33,10 +25,6 @@ import pandas as pd
 
 
 # # Load data
-
-# In[5]:
-
-
 def load_filenames_labels(mode):
     label_dict, class_description = build_label_dicts()
     filenames_labels = []
@@ -149,10 +137,6 @@ print("Test labels shape after splitting:", test_labels.shape)
 
 
 # # Mobile net 
-
-# In[6]:
-
-
 def build_model(dropout_rate, regularization_rate):
     keras.backend.clear_session()
     # Load the MobileNet model (pre-trained on ImageNet)
@@ -185,10 +169,6 @@ def build_model(dropout_rate, regularization_rate):
 
 
 # # Training with Multi-processing 
-
-# In[ ]:
-
-
 import concurrent.futures
 hyperparams = [
     {'reg_rate': 0.001, 'dropout_rate': 0.1},
@@ -210,9 +190,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=len(hyperparams)) as exec
 
 
 # # Training with Multi-processing including time graph
-
-# In[ ]:
-
 
 import time
 import concurrent.futures
@@ -239,10 +216,6 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=len(hyperparams)) as exec
 
 
 # # Training with Multiprocessing, print CPU usage and time
-
-# In[10]:
-
-
 import time
 import concurrent.futures
 import psutil
@@ -283,8 +256,6 @@ df = pd.DataFrame({
 print(df.to_string(index=False))
 
 
-# In[ ]:
-
 
 # Plot the execution time graph
 import matplotlib.pyplot as plt
@@ -299,10 +270,6 @@ plt.show()
 
 
 # # Training without Multi-processing 
-
-# In[ ]:
-
-
 import time
 import matplotlib.pyplot as plt
 
@@ -330,10 +297,6 @@ for idx, params in enumerate(hyperparams):
 
 
 # # Training without multiprocessing print cpu usage, time
-
-# In[31]:
-
-
 import time
 import psutil
 import pandas as pd
@@ -384,9 +347,6 @@ for idx, params in enumerate(hyperparams):
 
 
 
-# In[30]:
-
-
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 8))
 for i in range(len(hyperparams)):
     ax1.plot(cpu_usages[i], label=f"Model {i+1}", linewidth=2, color='#FFA500')
@@ -409,8 +369,6 @@ plt.savefig("usage_graphs.png")
 plt.show()
 
 
-# In[ ]:
-
 
 # Increase font size of ticks
 import matplotlib.pyplot as plt
@@ -428,9 +386,6 @@ plt.show()
 
 
 # # Train Val Accuracy and Loss
-
-# In[ ]:
-
 
 # Define a color palette
 palette = sns.color_palette("husl", len(models))
@@ -492,9 +447,6 @@ for idx,model in enumerate(models):
 
 # # Evaluating on test set with multiprocessing 
 
-# In[ ]:
-
-
 import concurrent.futures
 import time
 import psutil
@@ -542,10 +494,6 @@ for i in range(len(models)):
 
 
 # # Evaluation on test without multi process
-
-# In[ ]:
-
-
 import concurrent.futures
 import time
 import psutil
@@ -589,10 +537,6 @@ for i in range(len(models)):
 
 
 # # Adversarial Image Generator 
-
-# In[ ]:
-
-
 def generate_image_adversary(pretrained_model, image, label, eps, num_steps, step_size):
     # Cast the image
     image = tf.cast(image, tf.float32)
@@ -633,10 +577,6 @@ def generate_image_adversary(pretrained_model, image, label, eps, num_steps, ste
 
 
 # # Adversarial Evaluation on Test set
-
-# In[ ]:
-
-
 adversarial_accuracies = []
 test_accuracies = []
 
@@ -664,10 +604,6 @@ for model in models:
 
 
 # # Adversarial Confusion Matrices (Largest Frequency Labels)
-
-# In[ ]:
-
-
 def plot_confusion_matrix(matrix, ax, title, cmap, top_labels=5):
     matrix_norm = matrix.astype('float') / matrix.sum(axis=1)[:, np.newaxis]
     top_idx = np.argsort(-matrix_norm.sum(axis=0))[:top_labels]  # get the indices of the top labels
@@ -706,10 +642,6 @@ for i, model in enumerate(models):
 
 
 # # One pixel
-
-# In[ ]:
-
-
 def one_pixel_method(numpy_array):
     # 80% chance of this happening
     if randint(0, 100) <= 60:
@@ -730,10 +662,6 @@ def one_pixel_method(numpy_array):
 
 
 # # Generate one pixel images on test set
-
-# In[ ]:
-
-
 # Generate adversarial images
 test_images_copy = test_images.copy()
 num_images_to_generate = len(test_images_copy)
@@ -745,10 +673,6 @@ one_pixel_test_images = np.array(one_pixel_test_images)
 
 
 # # One pixel method without parallelism 
-
-# In[ ]:
-
-
 import psutil
 import time
 
@@ -788,10 +712,6 @@ print(df.to_string(index=False))
 
 
 # # One pixel method with parallelism 
-
-# In[ ]:
-
-
 import concurrent.futures
 from tqdm import tqdm
 import pandas as pd
@@ -859,10 +779,6 @@ print(df.to_string(index=False))
 
 
 # # One pixel Confusion Matrices (Largest Frequency Labels)
-
-# In[ ]:
-
-
 for i, model in enumerate(models):
     # Get the predictions of the model on the original test set and the adversarial images
     original_preds = model.predict(test_images)
