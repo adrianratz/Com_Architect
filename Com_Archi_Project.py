@@ -3,7 +3,7 @@
 
 # # Import Libraries 
 
-# In[1]:
+# In[4]:
 
 
 import numpy as np
@@ -34,7 +34,7 @@ import pandas as pd
 
 # # Load data
 
-# In[2]:
+# In[5]:
 
 
 def load_filenames_labels(mode):
@@ -150,7 +150,7 @@ print("Test labels shape after splitting:", test_labels.shape)
 
 # # Mobile net 
 
-# In[3]:
+# In[6]:
 
 
 def build_model(dropout_rate, regularization_rate):
@@ -184,60 +184,7 @@ def build_model(dropout_rate, regularization_rate):
     return model
 
 
-# # OUR SVHN MODEL
-
-# In[4]:
-
-
-# def build_model(dropout_rate, regularization_rate):
-#     keras.backend.clear_session()
-
-#     model = keras.Sequential([
-#         keras.layers.Conv2D(32, (3, 3), padding='same', 
-#                                activation='relu',
-#                                input_shape=(64, 64, 3),
-#                                kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.BatchNormalization(),
-#         keras.layers.Conv2D(32, (3, 3), padding='same', 
-#                             activation='relu',
-#                             kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.MaxPooling2D((2, 2)),
-#         keras.layers.Dropout(dropout_rate),
-
-#         keras.layers.Conv2D(64, (3, 3), padding='same', 
-#                                activation='relu',
-#                                kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.BatchNormalization(),
-#         keras.layers.Conv2D(64, (3, 3), padding='same',
-#                             activation='relu',
-#                             kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.MaxPooling2D((2, 2)),
-#         keras.layers.Dropout(dropout_rate),
-
-#         keras.layers.Conv2D(128, (3, 3), padding='same', 
-#                                activation='relu',
-#                                kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.BatchNormalization(),
-#         keras.layers.Conv2D(128, (3, 3), padding='same',
-#                             activation='relu',
-#                             kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.MaxPooling2D((2, 2)),
-#         keras.layers.Dropout(dropout_rate),
-
-#         keras.layers.Flatten(),
-#         keras.layers.Dense(256, activation='relu',
-#                            kernel_regularizer=regularizers.l2(regularization_rate)),
-#         keras.layers.Dropout(dropout_rate),    
-#         keras.layers.Dense(200,  activation='softmax')
-#     ])
-
-#     # Compile the model
-#     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    
-#     return model
-
-
-# # Training with Multi-processing
+# # Training with Multi-processing 
 
 # In[ ]:
 
@@ -262,10 +209,43 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=len(hyperparams)) as exec
         print(f"Finished training model {idx+1}")
 
 
-# # Training 
+# # Training with Multi-processing including time graph
 
-# In[5]:
+# In[ ]:
 
+
+import time
+import concurrent.futures
+
+hyperparams = [    {'reg_rate': 0.001, 'dropout_rate': 0.1},    {'reg_rate': 0.001, 'dropout_rate': 0.15},    {'reg_rate': 0.001, 'dropout_rate': 0.2},]
+
+def train_model(params):
+    start_time = time.time()
+    model = build_model(params['dropout_rate'], params['reg_rate'])
+    history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=5, verbose=1)
+    end_time = time.time()
+    return model, history, end_time - start_time
+
+models = []
+execution_times = []
+with concurrent.futures.ThreadPoolExecutor(max_workers=len(hyperparams)) as executor:
+    futures = [executor.submit(train_model, params) for params in hyperparams]
+    for idx, future in enumerate(concurrent.futures.as_completed(futures)):
+        model, history, execution_time = future.result()
+        models.append(model)
+        execution_times.append(execution_time)
+        print(f"Finished training model {idx+1}")
+
+
+
+# # Training with Multiprocessing, print CPU usage and time
+
+# In[10]:
+
+
+import time
+import concurrent.futures
+import psutil
 
 hyperparams = [
     {'reg_rate': 0.001, 'dropout_rate': 0.1},
@@ -273,26 +253,183 @@ hyperparams = [
     {'reg_rate': 0.001, 'dropout_rate': 0.2},
 ]
 
+def train_model(params):
+    start_time = time.time()
+    model = build_model(params['dropout_rate'], params['reg_rate'])
+    history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=1, verbose=1)
+    end_time = time.time()
+    cpu_usage = psutil.cpu_percent()
+    return model, history, end_time - start_time, cpu_usage
 
 models = []
+execution_times = []
+cpu_usages = []
+with concurrent.futures.ThreadPoolExecutor(max_workers=len(hyperparams)) as executor:
+    futures = [executor.submit(train_model, params) for params in hyperparams]
+    for idx, future in enumerate(concurrent.futures.as_completed(futures)):
+        model, history, execution_time, cpu_usage = future.result()
+        models.append(model)
+        execution_times.append(execution_time)
+        cpu_usages.append(cpu_usage)
+        print(f"Finished training model {idx+1} with CPU usage: {cpu_usage:.2f}% and execution time: {execution_time:.2f} seconds")
+
+# Print execution times and CPU usages for each model in a table
+import pandas as pd
+df = pd.DataFrame({
+    "Model": [f"Model {idx+1}" for idx in range(len(hyperparams))],
+    "Execution Time (s)": execution_times,
+    "CPU Usage (%)": cpu_usages
+})
+print(df.to_string(index=False))
+
+
+# In[ ]:
+
+
+# Plot the execution time graph
+import matplotlib.pyplot as plt
+plt.figure(figsize=(8,6))
+plt.bar(range(len(execution_times)), execution_times, color='#5DA5DA')
+plt.xticks(range(len(execution_times)), ['Model {}'.format(i+1) for i in range(len(execution_times))], fontsize=14)
+plt.yticks(fontsize=14)
+plt.ylabel('Execution Time (seconds)', fontsize=16)
+plt.title('Execution Time per Model', fontsize=18)
+plt.savefig('/Users/aratwatte2/Library/CloudStorage/OneDrive-UniversityofNebraska-Lincoln/Nebraska-Lincoln/Spring-2023/Com_Architect/Project/execution_times_with_multi.png', dpi=300, bbox_inches='tight')
+plt.show()
+
+
+# # Training without Multi-processing 
+
+# In[ ]:
+
+
+import time
+import matplotlib.pyplot as plt
+
+hyperparams = [    {'reg_rate': 0.001, 'dropout_rate': 0.1},    {'reg_rate': 0.001, 'dropout_rate': 0.15},    {'reg_rate': 0.001, 'dropout_rate': 0.2},]
+
+models = []
+training_times = []
 
 for idx, params in enumerate(hyperparams):
     print(f"Training model {idx+1} with parameters:")
     print(params)
     print("--------------------------")
-    model= build_model(params['dropout_rate'], params['reg_rate'])
-#     model, early_stop = build_model(params['dropout_rate'], params['reg_rate'])
-#     history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=100, callbacks=[early_stop], verbose=1)
-    history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=10, verbose=1)
+    start_time = time.time()
+    model = build_model(params['dropout_rate'], params['reg_rate'])
+    history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=5, verbose=1)
+    end_time = time.time()
+    training_time = end_time - start_time
     models.append(model)
+    training_times.append(training_time)
     print("--------------------------")
     print(f"Finished training model {idx+1}")
+    print(f"Training time: {training_time:.2f} seconds")
     print("--------------------------")
+
+
+
+# # Training without multiprocessing print cpu usage, time
+
+# In[31]:
+
+
+import time
+import psutil
+import pandas as pd
+import matplotlib.pyplot as plt
+
+hyperparams = [{'reg_rate': 0.001, 'dropout_rate': 0.1},{'reg_rate': 0.001, 'dropout_rate': 0.15},{'reg_rate': 0.001, 'dropout_rate': 0.2}]
+
+models = []
+training_times = []
+cpu_usages = []
+memory_usages = []
+histories = []
+
+for idx, params in enumerate(hyperparams):
+    print(f"Training model {idx+1} with parameters:")
+    print(params)
+    print("--------------------------")
+    start_time = time.time()
+    model = build_model(params['dropout_rate'], params['reg_rate'])
+    history = model.fit(train_images, train_labels, validation_data=(val_images, val_labels), epochs=10, verbose=1)
+    end_time = time.time()
+    training_time = end_time - start_time
+    models.append(model)
+    training_times.append(training_time)
+    
+    # track CPU usage and memory usage
+    cpu_usage = []
+    memory_usage = []
+    for i, (_, logs) in enumerate(history.history.items()):
+        # get current CPU and memory usage
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+        cpu_usage.append(cpu)
+        memory_usage.append(mem)
+        
+        # print progress
+        print(f"Epoch {i+1}: CPU usage={cpu:.2f}%, Memory usage={mem:.2f}%")
+    
+    # store results
+    cpu_usages.append(cpu_usage)
+    memory_usages.append(memory_usage)
+    histories.append(history)
+    
+    print("--------------------------")
+    print(f"Finished training model {idx+1}")
+    print(f"Training time: {training_time:.2f} seconds\t CPU usage: {cpu_usage[-1]:.2f}%\t Memory usage: {memory_usage[-1]:.2f}%")
+    print("--------------------------")
+
+
+
+# In[30]:
+
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 8))
+for i in range(len(hyperparams)):
+    ax1.plot(cpu_usages[i], label=f"Model {i+1}", linewidth=2, color='#FFA500')
+ax1.legend()
+# ax1.set_title("CPU Usage", fontsize=20)
+ax1.set_xlabel("Epoch", fontsize=16)
+ax1.set_ylabel("CPU Usage (%)", fontsize=16)
+ax1.tick_params(axis='both', which='major', labelsize=14)
+
+for i in range(len(hyperparams)):
+    ax2.plot(memory_usages[i], label=f"Model {i+1}", linewidth=2, color= '#1f77b4')
+ax2.legend()
+# ax2.set_title("Memory Usage", fontsize=20)
+ax2.set_xlabel("Epoch", fontsize=16)
+ax2.set_ylabel("Usage (%)", fontsize=16)
+ax2.tick_params(axis='both', which='major', labelsize=14)
+
+plt.tight_layout()
+plt.savefig("usage_graphs.png")
+plt.show()
+
+
+# In[ ]:
+
+
+# Increase font size of ticks
+import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 16})
+
+# Plot the training times
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(range(1, len(hyperparams)+1), training_times, 'bo-')
+ax.set_title('Training Time vs Model')
+ax.set_xlabel('Model')
+ax.set_ylabel('Training Time (seconds)')
+ax.set_xticks(range(1, len(hyperparams)+1))
+plt.savefig('/Users/aratwatte2/Library/CloudStorage/OneDrive-UniversityofNebraska-Lincoln/Nebraska-Lincoln/Spring-2023/Com_Architect/Project/without_parallel_execution_times.png', dpi=300, bbox_inches='tight')
+plt.show()
 
 
 # # Train Val Accuracy and Loss
 
-# In[6]:
+# In[ ]:
 
 
 # Define a color palette
@@ -353,15 +490,72 @@ for idx,model in enumerate(models):
     plt.show()
 
 
-# # Evaluating on test set
+# # Evaluating on test set with multiprocessing 
 
-# In[7]:
+# In[ ]:
 
+
+import concurrent.futures
+import time
+import psutil
+
+# Define a function to evaluate a model on test data
+def evaluate_model(model, test_images, test_labels):
+    # Get model name
+    model_name = f"Model {models.index(model)+1}"
+    
+    # Record start time
+    start_time = time.time()
+    
+    # Evaluate model on test data
+    test_loss, test_acc = model.evaluate(x=test_images, y=test_labels, verbose=1)
+    
+    # Record end time
+    end_time = time.time()
+    
+    # Calculate execution time
+    exec_time = end_time - start_time
+    
+    # Get CPU usage
+    cpu_usage = psutil.cpu_percent()
+    
+    # Print results
+    print(f"{model_name}: Test accuracy = {test_acc:.4f}, Test loss = {test_loss:.4f}, Execution time = {exec_time:.2f} s, CPU usage = {cpu_usage}%")
+    
+    # Return results
+    return (model_name, test_acc, test_loss, exec_time, cpu_usage)
+
+# Evaluate each model on test data
+print("Evaluating models on test data...")
+with concurrent.futures.ThreadPoolExecutor(max_workers=len(models)) as executor:
+    futures = [executor.submit(evaluate_model, model, test_images, test_labels) for model in models]
+
+# Get results
+results = [future.result() for future in concurrent.futures.as_completed(futures)]
+
+# Print results in a table
+print("\nResults:")
+print(f"{'Model':<10}{'Accuracy':<15}{'Loss':<15}{'Execution Time':<25}{'CPU Usage (%)':<15}")
+for i in range(len(models)):
+    model_name, test_acc, test_loss, exec_time, cpu_usage = results[i]
+    print(f"{model_name:<10}{test_acc:<15.4f}{test_loss:<15.4f}{exec_time:<25.2f}{cpu_usage:<15.2f}")
+
+
+# # Evaluation on test without multi process
+
+# In[ ]:
+
+
+import concurrent.futures
+import time
+import psutil
 
 # Define lists to store results
 model_names = []
 test_losses = []
 test_accs = []
+exec_times = []
+cpu_usages = []
 
 # Evaluate each model on test data
 print("Evaluating models on test data...")
@@ -371,23 +565,32 @@ for idx, model in enumerate(models):
     model_names.append(model_name)
     
     # Evaluate model on test data
+    start_time = time.time()
     test_loss, test_acc = model.evaluate(x=test_images, y=test_labels, verbose=1)
+    end_time = time.time()
+    exec_time = end_time - start_time
+    exec_times.append(exec_time)
+    
+    # Get CPU usage
+    cpu_usage = psutil.cpu_percent()
+    cpu_usages.append(cpu_usage)
+    
     test_losses.append(test_loss)
     test_accs.append(test_acc)
     
     # Print results
-    print(f"{model_name}: Test accuracy = {test_acc:.4f}, Test loss = {test_loss:.4f}")
+    print(f"{model_name}: Test accuracy = {test_acc:.4f}, Test loss = {test_loss:.4f}, Execution time = {exec_time:.4f}s, CPU usage = {cpu_usage:.2f}%")
 
 # Print results in a table
 print("\nResults:")
-print(f"{'Model':<10}{'Accuracy':<15}{'Loss':<15}")
+print(f"{'Model':<10}{'Accuracy':<15}{'Loss':<15}{'Execution Time':<20}{'CPU Usage':<15}")
 for i in range(len(models)):
-    print(f"{model_names[i]:<10}{test_accs[i]:<15.4f}{test_losses[i]:<15.4f}")
+    print(f"{model_names[i]:<10}{test_accs[i]:<15.4f}{test_losses[i]:<15.4f}{exec_times[i]:<20.4f}s{cpu_usages[i]:<15.2f}%")
 
 
 # # Adversarial Image Generator 
 
-# In[8]:
+# In[ ]:
 
 
 def generate_image_adversary(pretrained_model, image, label, eps, num_steps, step_size):
@@ -431,7 +634,7 @@ def generate_image_adversary(pretrained_model, image, label, eps, num_steps, ste
 
 # # Adversarial Evaluation on Test set
 
-# In[22]:
+# In[ ]:
 
 
 adversarial_accuracies = []
@@ -462,7 +665,7 @@ for model in models:
 
 # # Adversarial Confusion Matrices (Largest Frequency Labels)
 
-# In[23]:
+# In[ ]:
 
 
 def plot_confusion_matrix(matrix, ax, title, cmap, top_labels=5):
@@ -498,13 +701,13 @@ for i, model in enumerate(models):
 
     # Add space between subplots and display plot
     plt.tight_layout()
-    plt.savefig(f"conf_mat_Adversarial_Model {i+1}_SVHN.png", dpi=300)
+    plt.savefig(f"conf_mat_Adversarial_{model.name}_SVHN.png", dpi=300)
     plt.show()
 
 
 # # One pixel
 
-# In[24]:
+# In[ ]:
 
 
 def one_pixel_method(numpy_array):
@@ -528,7 +731,7 @@ def one_pixel_method(numpy_array):
 
 # # Generate one pixel images on test set
 
-# In[25]:
+# In[ ]:
 
 
 # Generate adversarial images
@@ -541,33 +744,115 @@ for image in tqdm(test_images_copy[:num_images_to_generate], desc="Generating ad
 one_pixel_test_images = np.array(one_pixel_test_images)
 
 
-# In[26]:
+# # One pixel method without parallelism 
+
+# In[ ]:
 
 
-# Create DataFrame to store accuracies
-df = pd.DataFrame(columns=["Model", "One pixel Accuracy", "Test Accuracy"])
+import psutil
+import time
+
+# Create DataFrame to store accuracies and execution times
+df = pd.DataFrame(columns=["Model", "One pixel Accuracy", "Test Accuracy", "Execution Time", "CPU Usage"])
 
 # Evaluate each model on original test images and adversarial images
 for idx, model in enumerate(models):
     print(f"Evaluating model {idx+1} on original test images")
+    start_time = time.time()
     original_predictions = model.predict(test_images)
     original_predicted_labels = np.argmax(original_predictions, axis=1)
     true_labels = np.array(test_labels)
     original_accuracy = np.mean(original_predicted_labels == true_labels)
     print(f"Accuracy on original test images for model {idx+1}: {original_accuracy:.4f}")
-
+    
     # Evaluate each model on adversarial images
     print(f"Evaluating model {idx+1} on adversarial images")
     predictions = model.predict(one_pixel_test_images)
     predicted_labels = np.argmax(predictions, axis=1)
     accuracy = np.mean(predicted_labels == true_labels[:num_images_to_generate])
     print(f"Accuracy on one pixel images for model {idx+1}: {accuracy:.4f}")
-
-    # Add accuracies to DataFrame
+    
+    # Add accuracies, execution time, and CPU usage to DataFrame
+    end_time = time.time()
+    execution_time = end_time - start_time
+    cpu_usage = psutil.cpu_percent()
     df = df.append({"Model": f"Model {idx+1}", 
                     "One pixel Accuracy": accuracy, 
-                    "Test Accuracy": original_accuracy}, 
+                    "Test Accuracy": original_accuracy, 
+                    "Execution Time": execution_time, 
+                    "CPU Usage": cpu_usage}, 
                    ignore_index=True)
+
+# Print DataFrame
+print(df.to_string(index=False))
+
+
+# # One pixel method with parallelism 
+
+# In[ ]:
+
+
+import concurrent.futures
+from tqdm import tqdm
+import pandas as pd
+import time
+import psutil
+
+def evaluate_model(model, model_idx):
+    # Evaluate model on original test images
+    print(f"Evaluating model {model_idx+1} on original test images")
+    start_time_orig = time.time()
+    original_predictions = model.predict(test_images)
+    original_predicted_labels = np.argmax(original_predictions, axis=1)
+    true_labels = np.array(test_labels)
+    original_accuracy = np.mean(original_predicted_labels == true_labels)
+    end_time_orig = time.time()
+    print(f"Accuracy on original test images for model {model_idx+1}: {original_accuracy:.4f}")
+
+    # Evaluate model on adversarial images
+    print(f"Evaluating model {model_idx+1} on adversarial images")
+    start_time_adv = time.time()
+    predictions = model.predict(one_pixel_test_images)
+    predicted_labels = np.argmax(predictions, axis=1)
+    accuracy = np.mean(predicted_labels == true_labels[:num_images_to_generate])
+    end_time_adv = time.time()
+    print(f"Accuracy on one pixel images for model {model_idx+1}: {accuracy:.4f}")
+
+    # Get CPU usage
+    cpu_usage = psutil.cpu_percent()
+
+    # Return accuracies, model index, start/end times, and CPU usage
+    return model_idx, accuracy, original_accuracy, start_time_orig, end_time_orig, start_time_adv, end_time_adv, cpu_usage
+
+# Create DataFrame to store accuracies and execution times
+df = pd.DataFrame(columns=["Model", "One pixel Accuracy", "Test Accuracy", "Orig Start Time", "Orig End Time", "Adv Start Time", "Adv End Time", "CPU Usage"])
+
+# Evaluate models in parallel
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    futures = []
+    for i, model in enumerate(models):
+        future = executor.submit(evaluate_model, model, i)
+        futures.append(future)
+
+        # Update progress using tqdm
+        progress = f"Evaluating model {i+1}/{len(models)}"
+        tqdm.write(progress)
+
+    # Wait for all futures to finish with a timeout of 300 seconds
+    concurrent.futures.wait(futures, timeout=300)
+
+    # Get results from futures and add them to DataFrame
+    for future in futures:
+        model_idx, accuracy, original_accuracy, start_time_orig, end_time_orig, start_time_adv, end_time_adv, cpu_usage = future.result()
+        df = df.append({"Model": f"Model {model_idx+1}", 
+                        "One pixel Accuracy": accuracy, 
+                        "Test Accuracy": original_accuracy,
+                        "Orig Start Time": start_time_orig,
+                        "Orig End Time": end_time_orig,
+                        "Adv Start Time": start_time_adv,
+                        "Adv End Time": end_time_adv,
+                        "CPU Usage": cpu_usage}, 
+                       ignore_index=True)
 
 # Print DataFrame
 print(df.to_string(index=False))
@@ -575,7 +860,7 @@ print(df.to_string(index=False))
 
 # # One pixel Confusion Matrices (Largest Frequency Labels)
 
-# In[28]:
+# In[ ]:
 
 
 for i, model in enumerate(models):
@@ -594,10 +879,10 @@ for i, model in enumerate(models):
     # Create a new figure and plot the confusion matrices
     fig, axs = plt.subplots(1, 2, figsize=(16, 8), dpi=300)
     plot_confusion_matrix(original_confusion_matrix, axs[0], f"Original Confusion Matrix (Model {i+1})", cmap="Greens", top_labels=5)
-    plot_confusion_matrix(adversarial_confusion_matrix, axs[1], f"One-pixel Confusion Matrix (Model {i+1})", cmap="Purples", top_labels=5)
+    plot_confusion_matrix(adversarial_confusion_matrix, axs[1], f"Adversarial Confusion Matrix (Model {i+1})", cmap="Blues", top_labels=5)
 
     # Add space between subplots and display plot
     plt.tight_layout()
-    plt.savefig(f"conf_mat_OnePixel_Model {i+1}_SVHN.png", dpi=300)
+    plt.savefig(f"conf_mat_Adversarial_{model.name}_SVHN.png", dpi=300)
     plt.show()
 
